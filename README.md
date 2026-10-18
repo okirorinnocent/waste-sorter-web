@@ -4,7 +4,7 @@ A browser-based waste classification app. Upload a photo or use your camera, and
 
 The model was trained with [Google Teachable Machine](https://teachablemachine.withgoogle.com/) and runs entirely in the browser using TensorFlow.js. There is no backend server, so it is fast, free to host and works on phones.
 
-**Live demo:** _add your Vercel link here_
+**Live demo:** https://waste-sorter-web.vercel.app/
 
 ## Features
 
