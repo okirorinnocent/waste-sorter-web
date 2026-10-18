@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waste Sorter</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 520px; margin: 0 auto; padding: 20px; background: #f4f7f5; color: #1b2b22; }
+  h1 { text-align: center; }
+  .card { background: #fff; border-radius: 14px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.08); margin-bottom: 16px; }
+  button, label.btn { background: #2e7d4f; color: #fff; border: 0; padding: 10px 16px; border-radius: 8px; font-size: 15px; cursor: pointer; display: inline-block; margin: 4px 4px 4px 0; }
+  button.alt { background: #455a64; }
+  input[type=file] { display: none; }
+  #preview img, #preview canvas, #preview video { max-width: 100%; border-radius: 10px; }
+  .result { font-size: 22px; font-weight: 700; margin: 10px 0 4px; }
+  .tip { color: #455a64; }
+  .bar { background: #e0e6e2; border-radius: 6px; height: 18px; margin: 4px 0 10px; overflow: hidden; }
+  .bar > div { background: #2e7d4f; height: 100%; width: 0; transition: width .3s; }
+  .row { display: flex; justify-content: space-between; font-size: 14px; }
+</style>
+</head>
+<body>
+  <h1>♻️ Waste Sorter</h1>
+  <div class="card">
+    <p>Take or upload a photo of a waste item and find out which bin it belongs in.</p>
+    <label class="btn">Upload photo<input type="file" id="file" accept="image/*"></label>
+    <button class="alt" id="camBtn">Use camera</button>
+    <button class="alt" id="snapBtn" style="display:none">Capture</button>
+    <div id="preview"></div>
+  </div>
+  <div class="card" id="out" style="display:none">
+    <div class="result" id="top"></div>
+    <div class="tip" id="tip"></div>
+    <div id="bars" style="margin-top:12px"></div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.7.4/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+<script>
+  const MODEL_URL = "model/model.json";
+  const META_URL = "model/metadata.json";
+  // Keys are lowercase; matching ignores capital letters.
+  // They must match the class names in metadata.json.
+  const TIPS = {
+    plastic: "Rinse and place in the plastic recycling bin.",
+    paper: "Keep it dry and clean, then place in the paper bin.",
+    metal: "Rinse cans and place in the metal recycling bin.",
+    glass: "Place in the glass recycling bin. Handle broken glass carefully.",
+    cupboard: "Flatten it and keep it dry, then place in the cardboard/paper bin.",
+    carton: "Empty and rinse the carton, flatten it, then place in the recycling bin.",
+    clothes: "Donate wearable clothes, or take old textiles to a textile collection point.",
+    battery: "Do not put in normal trash. Take to an e-waste or battery collection point.",
+    trash: "General waste. Place in the normal trash bin."
+  };
+  let model, webcam;
+  const preview = document.getElementById("preview");
+
+  async function init() {
+    model = await tmImage.load(MODEL_URL, META_URL);
+  }
+  const ready = init();
+
+  async function classify(el) {
+    await ready;
+    const preds = await model.predict(el);
+    preds.sort((a, b) => b.probability - a.probability);
+    const best = preds[0];
+    document.getElementById("out").style.display = "block";
+    const pct = Math.round(best.probability * 100);
+    document.getElementById("top").textContent =
+      pct < 60 ? `Not sure. Best guess: ${best.className} (${pct}%)` : `${best.className} (${pct}%)`;
+    document.getElementById("tip").textContent =
+      pct < 60 ? "Try a clearer photo on a plain background." : (TIPS[best.className.toLowerCase()] || "");
+    document.getElementById("bars").innerHTML = preds.map(p => {
+      const v = Math.round(p.probability * 100);
+      return `<div class="row"><span>${p.className}</span><span>${v}%</span></div>
+              <div class="bar"><div style="width:${v}%"></div></div>`;
+    }).join("");
+  }
+
+  document.getElementById("file").addEventListener("change", e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    stopCam();
+    const img = new Image();
+    img.onload = () => { preview.innerHTML = ""; preview.appendChild(img); classify(img); };
+    img.src = URL.createObjectURL(f);
+  });
+
+  document.getElementById("camBtn").addEventListener("click", async () => {
+    stopCam();
+    webcam = new tmImage.Webcam(300, 300, true);
+    await webcam.setup();
+    await webcam.play();
+    preview.innerHTML = "";
+    preview.appendChild(webcam.canvas);
+    document.getElementById("snapBtn").style.display = "inline-block";
+    const loop = () => { if (webcam) { webcam.update(); requestAnimationFrame(loop); } };
+    loop();
+  });
+
+  document.getElementById("snapBtn").addEventListener("click", () => {
+    if (webcam) classify(webcam.canvas);
+  });
+
+  function stopCam() {
+    if (webcam) { webcam.stop(); webcam = null; }
+    document.getElementById("snapBtn").style.display = "none";
+  }
+</script>
+</body>
+</html>
